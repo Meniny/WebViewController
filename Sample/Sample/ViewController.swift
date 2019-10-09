@@ -16,7 +16,6 @@ class ViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        // Do any additional setup after loading the view, typically from a nib.
     }
     
     @IBAction func presentWeb(_ sender: UIButton) {
@@ -24,14 +23,16 @@ class ViewController: UIViewController {
         webViewController.source = .remote(url)
         webViewController.bypassedSSLHosts = [url.host!]
         webViewController.userAgent = "WKWebViewController/1.0.0"
-        webViewController.websiteTitleInNavigationBar = false
-        webViewController.navigationItem.title = "Elias's Cave"
+        webViewController.websiteTitleInNavigationBar = true
         webViewController.leftNavigaionBarItemTypes = [.reload]
         webViewController.toolbarItemTypes = [.back, .forward, .activity]
-        
+        webViewController.navigationBarBackgroundColor = .white
+        webViewController.navigationBarForegroundColor = .blue
+        webViewController.tintColor = .red
         let navigation = UINavigationController.init(rootViewController: webViewController)
         if #available(iOS 11.0, *) {
             navigation.navigationBar.prefersLargeTitles = true
+            webViewController.adjustFontSizeForNavigationBarLargeTitle = true
         }
         
         self.present(navigation, animated: true, completion: nil)
@@ -42,6 +43,8 @@ class ViewController: UIViewController {
         webViewController.source = .remote(url)
         webViewController.headers = ["browser": "in-app browser"]
         webViewController.tintColor = .red
+        webViewController.navigationBarBackgroundColor = .white
+        webViewController.navigationBarForegroundColor = .blue
         webViewController.cookies = [
             HTTPCookie(properties:
                 [HTTPCookiePropertyKey.originURL: url.absoluteString,
@@ -53,7 +56,12 @@ class ViewController: UIViewController {
                  HTTPCookiePropertyKey.path: "/",
                  HTTPCookiePropertyKey.name: "GitHub",
                  HTTPCookiePropertyKey.value: "Meniny"])!]
-        self.show(webViewController, sender: self)
+
+        if #available(iOS 11.0, *) {
+            webViewController.adjustFontSizeForNavigationBarLargeTitle = true
+        }
+
+        self.navigationController?.pushViewController(webViewController, animated: true)
     }
 
     override func didReceiveMemoryWarning() {

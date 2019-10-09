@@ -53,6 +53,10 @@ open class WKWebViewController: UIViewController {
     /// use `source` instead
     open internal(set) var url: URL?
     open var tintColor: UIColor?
+
+    open var navigationBarBackgroundColor: UIColor?
+    open var navigationBarForegroundColor: UIColor?
+
     open var allowsFileURL = true
     open var delegate: WKWebViewControllerDelegate?
     open var bypassedSSLHosts: [String]?
@@ -86,6 +90,15 @@ open class WKWebViewController: UIViewController {
     }
     
     open var websiteTitleInNavigationBar = true
+
+    private var _adjustFontSizeForNavigationBarLargeTitle = false
+
+    /// Set to `true` if you want to scale down the font size of the navigation bar large title in order to fit on one row.
+    @available(iOS 11.0, *) @objc open var adjustFontSizeForNavigationBarLargeTitle: Bool {
+        get { return _adjustFontSizeForNavigationBarLargeTitle }
+        set { _adjustFontSizeForNavigationBarLargeTitle = newValue }
+    }
+
     open var doneBarButtonItemPosition: NavigationBarPosition = .right
     open var leftNavigaionBarItemTypes: [BarButtonItemType] = []
     open var rightNavigaionBarItemTypes: [BarButtonItemType] = []
@@ -100,7 +113,7 @@ open class WKWebViewController: UIViewController {
     fileprivate var webView: WKWebView?
     fileprivate var progressView: UIProgressView?
     
-    fileprivate var previousNavigationBarState: (tintColor: UIColor, hidden: Bool) = (.black, false)
+    fileprivate var previousNavigationBarState: (tintColor: UIColor, backgroundColor: UIColor, foregroundColor: UIColor, hidden: Bool) = (.black, .white, .black, false)
     fileprivate var previousToolbarState: (tintColor: UIColor, hidden: Bool) = (.black, false)
     
     lazy fileprivate var originalUserAgent = UIWebView().stringByEvaluatingJavaScript(from: "navigator.userAgent")
@@ -158,7 +171,7 @@ open class WKWebViewController: UIViewController {
         super.viewDidLoad()
         
         self.view.backgroundColor = UIColor.white
-        
+
         self.extendedLayoutIncludesOpaqueBars = true
         self.edgesForExtendedLayout = [.bottom]
         
@@ -182,9 +195,15 @@ open class WKWebViewController: UIViewController {
         self.webView?.customUserAgent = self.customUserAgent ?? self.userAgent ?? self.originalUserAgent
         
         self.navigationItem.title = self.navigationItem.title ?? self.source?.absoluteString
-        
+
+        if #available(iOS 11.0, *), adjustFontSizeForNavigationBarLargeTitle {
+            self.adjustNavigationBarLargeTitleSize()
+        }
+
         if let navigation = self.navigationController {
-            self.previousNavigationBarState = (navigation.navigationBar.tintColor, navigation.navigationBar.isHidden)
+            let previousBackgroundColor = navigation.navigationBar.backgroundColor ?? .white
+            let previousForegroundColor: UIColor = self.getNavigationBarTitleAttribute(attribute: NSAttributedString.Key.foregroundColor) as? UIColor ?? .black
+            self.previousNavigationBarState = (navigation.navigationBar.tintColor, previousBackgroundColor, previousForegroundColor, navigation.navigationBar.isHidden)
             self.previousToolbarState = (navigation.toolbar.tintColor, navigation.toolbar.isHidden)
         }
         
@@ -204,10 +223,9 @@ open class WKWebViewController: UIViewController {
         
         setUpState()
     }
-    
-    override open func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
-        
+
+    open override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
         rollbackState()
     }
     
@@ -235,6 +253,11 @@ open class WKWebViewController: UIViewController {
             }
         case titleKeyPath?:
             navigationItem.title = webView?.title
+
+            if #available(iOS 11.0, *), adjustFontSizeForNavigationBarLargeTitle {
+                self.adjustNavigationBarLargeTitleSize()
+            }
+            
         default:
             super.observeValue(forKeyPath: keyPath, of: object, change: change, context: context)
         }
@@ -461,16 +484,63 @@ fileprivate extension WKWebViewController {
             navigationController?.navigationBar.tintColor = tintColor
             navigationController?.toolbar.tintColor = tintColor
         }
+
+        if let navBackgroundColor = self.navigationBarBackgroundColor {
+            navigationController?.navigationBar.backgroundColor = navBackgroundColor
+        }
+
+        if let navForegroundColor = self.navigationBarForegroundColor {
+            self.setNavigationBarTitleAttributes(attributes: [NSAttributedString.Key.foregroundColor : navForegroundColor])
+        }
     }
     
     func rollbackState() {
         progressView?.progress = 0
-        
+
+        navigationController?.navigationBar.backgroundColor = previousNavigationBarState.backgroundColor
+        self.setNavigationBarTitleAttributes(attributes: [NSAttributedString.Key.foregroundColor : previousNavigationBarState.foregroundColor])
+
         navigationController?.navigationBar.tintColor = previousNavigationBarState.tintColor
         navigationController?.toolbar.tintColor = previousToolbarState.tintColor
         
         navigationController?.setToolbarHidden(previousToolbarState.hidden, animated: true)
         navigationController?.setNavigationBarHidden(previousNavigationBarState.hidden, animated: true)
+    }
+
+    func setNavigationBarTitleAttributes(attributes: [NSAttributedString.Key : Any]) {
+        guard let navController = self.navigationController else {
+            return
+        }
+
+        if #available(iOS 11.0, *), let prefersLargeTitles = self.navigationController?.navigationBar.prefersLargeTitles, prefersLargeTitles {
+            if navController.navigationBar.largeTitleTextAttributes == nil {
+                navController.navigationBar.largeTitleTextAttributes = [NSAttributedString.Key : Any]()
+            }
+            attributes.forEach {
+                navController.navigationBar.largeTitleTextAttributes?[$0.key] = $0.value
+            }
+        } else {
+            if navController.navigationBar.titleTextAttributes == nil {
+                navController.navigationBar.titleTextAttributes = [NSAttributedString.Key : Any]()
+            }
+
+            attributes.forEach {
+                navController.navigationBar.titleTextAttributes?[$0.key] = $0.value
+            }
+        }
+    }
+
+    func getNavigationBarTitleAttribute(attribute: NSAttributedString.Key) -> Any? {
+
+        guard let navController = self.navigationController else {
+            return nil
+        }
+
+        if #available(iOS 11.0, *), let prefersLargeTitles = self.navigationController?.navigationBar.prefersLargeTitles, prefersLargeTitles {
+            return navController.navigationBar.largeTitleTextAttributes?[attribute]
+        } else {
+            return navController.navigationBar.titleTextAttributes?[attribute]
+        }
     }
     
     func checkRequestCookies(_ request: URLRequest, cookies: [HTTPCookie]) -> Bool {
@@ -546,7 +616,7 @@ fileprivate extension WKWebViewController {
         webView?.stopLoading()
     }
     
-    @objc func activityDidClick(sender: AnyObject) {
+    @objc func activityDidClick(sender: UIBarButtonItem) {
         guard let s = self.source else {
             return
         }
@@ -562,6 +632,7 @@ fileprivate extension WKWebViewController {
         }
         
         let activityViewController = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        activityViewController.popoverPresentationController?.barButtonItem = sender
         present(activityViewController, animated: true, completion: nil)
     }
     
@@ -577,6 +648,25 @@ fileprivate extension WKWebViewController {
     
     @objc func customDidClick(sender: BlockBarButtonItem) {
         sender.block?(self)
+    }
+
+    @objc func adjustNavigationBarLargeTitleSize() {
+
+        guard #available(iOS 11.0, *) else { return }
+
+        let prefersLargeTitle = self.navigationController?.navigationBar.prefersLargeTitles ?? false
+        guard prefersLargeTitle, let title = self.navigationItem.title else { return }
+
+        let maxWidth = UIScreen.main.bounds.size.width - 60
+        var fontSize = UIFont.preferredFont(forTextStyle: .largeTitle).pointSize
+        var width = title.size(withAttributes: [NSAttributedString.Key.font: UIFont.systemFont(ofSize: fontSize)]).width
+
+        while width > maxWidth {
+            fontSize -= 1
+            width = title.size(withAttributes: [NSAttributedString.Key.font: UIFont.systemFont(ofSize: fontSize)]).width
+        }
+
+        self.navigationController?.navigationBar.largeTitleTextAttributes?[NSAttributedString.Key.font] = UIFont.boldSystemFont(ofSize: fontSize)
     }
 }
 

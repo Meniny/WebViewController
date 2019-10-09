@@ -546,7 +546,7 @@ fileprivate extension WKWebViewController {
         webView?.stopLoading()
     }
     
-    @objc func activityDidClick(sender: AnyObject) {
+    @objc func activityDidClick(sender: UIBarButtonItem) {
         guard let s = self.source else {
             return
         }
@@ -562,6 +562,7 @@ fileprivate extension WKWebViewController {
         }
         
         let activityViewController = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        activityViewController.popoverPresentationController?.barButtonItem = sender
         present(activityViewController, animated: true, completion: nil)
     }
     
